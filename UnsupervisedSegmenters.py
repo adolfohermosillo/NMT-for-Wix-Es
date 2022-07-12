@@ -6,6 +6,9 @@ class MorfessorTokenizer():
     def __init__(self):
         self.morf_model = morfessor.BaselineModel()
         self.model_path = ''
+        self.compounds = []
+        self.vocab = []
+        self.atoms = []
         
     def prepare_data(self, data, weights):
         words = Counter(open(data, 'r').read().split()).most_common()
@@ -13,6 +16,8 @@ class MorfessorTokenizer():
             train_data = [(j,i) for i,j in words]
         else:
             train_data = [(1,i) for i,j in words]
+        self.compounds = [i for i,j in words]
+        self.atoms = Counter("".join(self.compounds)).most_common()
         return train_data
         
         
@@ -30,6 +35,14 @@ class MorfessorTokenizer():
         
     #save model when trained
     def save_model (self):
+        
+        vocabulary = [ "▁"+" ".join(self.morf_model.segment(i)) for i in self.compounds] 
+        self.vocab = Counter(" ".join(vocabulary).split()).most_common()  + [(i,1) for i,j in self.atoms+[("▁",1)] if i not in self.vocab] 
+        
+        with open( self.model_path +'.vocab', 'w') as f:
+            for i,j in self.vocab:
+                f.write(f"{i}\t{j}\n")
+        
         with open( self.model_path +'.pickle', 'wb') as handle:
             model = self.morf_model
             pickle.dump(model, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -40,10 +53,15 @@ class MorfessorTokenizer():
         self.model_path = path
         with open(self.model_path, 'rb') as handle:
             self.morf_model = pickle.load(handle)
-
-       
-    
-    
+        try:
+            with open(self.model_path.replace('pickle','vocab'), 'r') as f:
+                self.vocab = [i.split() for i in f.readlines()]
+        except:
+            vocabulary = [ "▁"+" ".join(self.morf_model.segment(i)) for i in self.morf_model.get_compounds()]
+            self.vocab = Counter(" ".join(vocabulary).split()).most_common() + \
+            [(i,1) for i,j in self.atoms+[("▁",1)] if i not in self.vocab] 
+        
+        
     def segment_word(self, word, n, addcount =1):
         segments = self.morf_model.viterbi_nbest(word,n,addcount )
         if len(segments) < n:
@@ -100,3 +118,4 @@ if __name__ == '__main__':
     foo = "tokenize!"
     
     print(foo)
+
